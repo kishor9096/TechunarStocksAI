@@ -5,3 +5,4 @@ Flask-Bootstrap
 python-dotenv
 requests
 flask_wtf
+beautifulsoup4

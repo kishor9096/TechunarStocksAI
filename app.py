@@ -9,6 +9,7 @@ from wtforms.validators import DataRequired, NumberRange
 import os
 from dotenv import load_dotenv
 import requests
+from news_fetcher import fetch_news
 
 # Load environment variables
 load_dotenv()
@@ -87,6 +88,15 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # Routes
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    return render_template('dashboard.html')
+
 @app.route('/user_config', methods=['GET', 'POST'])
 @login_required
 def user_config():
@@ -111,10 +121,6 @@ def user_config():
         form.selected_news_sources.data = user_config.selected_news_sources.split(',') if user_config.selected_news_sources else []
     
     return render_template('user_config.html', form=form)
-
-@app.route('/')
-def index():
-    return render_template('index.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -193,10 +199,14 @@ def approve_user(user_id):
     
     return redirect(url_for('admin'))
 
-@app.route('/protected')
+@app.route('/news')
 @login_required
-def protected():
-    return f'Hello, {current_user.username}! This is a protected page.'
+def news():
+    user_config = current_user.get_config()
+    sources = user_config.selected_news_sources.split(',') if user_config.selected_news_sources else []
+    stocks = user_config.selected_stocks.split(',') if user_config.selected_stocks else []
+    news_articles = fetch_news(sources, stocks)
+    return render_template('news.html', articles=news_articles)
 
 @app.route('/decline_user/<int:user_id>')
 @login_required

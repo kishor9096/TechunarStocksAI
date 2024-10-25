@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Latest News</h1>
+
+{% if articles %}
+    {% for article in articles %}
+        <div class="article">
+            <h2>{{ article.title }}</h2>
+            <p>{{ article.description }}</p>
+            <p>Source: {{ article.source.name }}</p>
+            <p>Published: {{ article.publishedAt }}</p>
+            <a href="{{ article.url }}" target="_blank">Read more</a>
+        </div>
+        <hr>
+    {% endfor %}
+{% else %}
+    <p>No news articles found.</p>
+{% endif %}
+{% endblock %}
