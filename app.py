@@ -3,22 +3,19 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_bootstrap import Bootstrap5
+from flask_wtf import FlaskForm
+from wtforms import StringField, FloatField, SubmitField, SelectMultipleField
+from wtforms.validators import DataRequired, NumberRange
 import os
 from dotenv import load_dotenv
-import requests
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///app.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///techunar_stock_ai.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Mailgun configuration
-MAILGUN_API_KEY = os.getenv('MAILGUN_API_KEY')
-MAILGUN_DOMAIN = os.getenv('MAILGUN_DOMAIN')
-MAILGUN_FROM = f"Your App <mailgun@{MAILGUN_DOMAIN}>"
 
 # Initialize extensions
 db = SQLAlchemy(app)
@@ -26,14 +23,36 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 bootstrap = Bootstrap5(app)
 
-# Define a simple model
+# List of NSE stocks (you should replace this with a complete list)
+NSE_STOCKS = [
+    'RELIANCE', 'TCS', 'HDFC', 'INFY', 'ICICIBANK',
+    'HDFCBANK', 'ITC', 'KOTAKBANK', 'LT', 'HINDUNILVR'
+]
+
+# List of available news sources
+NEWS_SOURCES = [
+    'Economic Times', 'Moneycontrol', 'LiveMint', 'Business Standard',
+    'Financial Express', 'NDTV Profit', 'Bloomberg Quint'
+]
+
+# Models
+class UserConfig(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    risk_tolerance = db.Column(db.Float, nullable=False, default=0.5)
+    investment_horizon = db.Column(db.String(50), nullable=False, default='Medium-term')
+    preferred_sectors = db.Column(db.String(200), nullable=True)
+    selected_stocks = db.Column(db.String(500), nullable=True)
+    selected_news_sources = db.Column(db.String(200), nullable=True)
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    username = db.Column(db.String(64), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
-    is_approved = db.Column(db.Boolean, default=False)
     is_admin = db.Column(db.Boolean, default=False)
+    is_approved = db.Column(db.Boolean, default=False)
+    config = db.relationship('UserConfig', backref='user', uselist=False, cascade='all, delete-orphan')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -41,9 +60,51 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    def get_config(self):
+        if not self.config:
+            self.config = UserConfig(user_id=self.id)
+            db.session.add(self.config)
+            db.session.commit()
+        return self.config
+
+# Forms
+class ConfigForm(FlaskForm):
+    risk_tolerance = FloatField('Risk Tolerance (0-1)', validators=[DataRequired(), NumberRange(min=0, max=1)])
+    investment_horizon = StringField('Investment Horizon', validators=[DataRequired()])
+    preferred_sectors = StringField('Preferred Sectors (comma-separated)')
+    selected_stocks = SelectMultipleField('Select Stocks', choices=[(stock, stock) for stock in NSE_STOCKS])
+    selected_news_sources = SelectMultipleField('Select News Sources', choices=[(source, source) for source in NEWS_SOURCES])
+    submit = SubmitField('Update Configuration')
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+# Routes
+@app.route('/user_config', methods=['GET', 'POST'])
+@login_required
+def user_config():
+    form = ConfigForm()
+    user_config = current_user.get_config()
+    
+    if form.validate_on_submit():
+        user_config.risk_tolerance = form.risk_tolerance.data
+        user_config.investment_horizon = form.investment_horizon.data
+        user_config.preferred_sectors = form.preferred_sectors.data
+        user_config.selected_stocks = ','.join(form.selected_stocks.data)
+        user_config.selected_news_sources = ','.join(form.selected_news_sources.data)
+        db.session.commit()
+        flash('Your configuration has been updated.', 'success')
+        return redirect(url_for('user_config'))
+    
+    elif request.method == 'GET':
+        form.risk_tolerance.data = user_config.risk_tolerance
+        form.investment_horizon.data = user_config.investment_horizon
+        form.preferred_sectors.data = user_config.preferred_sectors
+        form.selected_stocks.data = user_config.selected_stocks.split(',') if user_config.selected_stocks else []
+        form.selected_news_sources.data = user_config.selected_news_sources.split(',') if user_config.selected_news_sources else []
+    
+    return render_template('user_config.html', form=form)
 
 @app.route('/')
 def index():
@@ -223,4 +284,6 @@ with app.app_context():
         print("Admin user already exists.")
 
 if __name__ == '__main__':
-    app.run(debug=False)  # Set debug to False in production
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)

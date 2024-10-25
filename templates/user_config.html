@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}User Configuration - Techunar Stock AI{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">User Configuration</h1>
+<form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+        {{ form.risk_tolerance.label(class="form-label") }}
+        {{ form.risk_tolerance(class="form-control") }}
+    </div>
+    <div class="mb-3">
+        {{ form.investment_horizon.label(class="form-label") }}
+        {{ form.investment_horizon(class="form-control") }}
+    </div>
+    <div class="mb-3">
+        {{ form.preferred_sectors.label(class="form-label") }}
+        {{ form.preferred_sectors(class="form-control") }}
+    </div>
+    <div class="mb-3">
+        {{ form.selected_stocks.label(class="form-label") }}
+        {{ form.selected_stocks(class="form-select", multiple="multiple", size="10") }}
+    </div>
+    <div class="mb-3">
+        {{ form.selected_news_sources.label(class="form-label") }}
+        {{ form.selected_news_sources(class="form-select", multiple="multiple", size="7") }}
+    </div>
+    {{ form.submit(class="btn btn-primary") }}
+</form>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script>
+    $(document).ready(function() {
+        $('#selected_stocks').select2({
+            placeholder: 'Select stocks',
+            allowClear: true
+        });
+        $('#selected_news_sources').select2({
+            placeholder: 'Select news sources',
+            allowClear: true
+        });
+    });
+</script>
+{% endblock %}
