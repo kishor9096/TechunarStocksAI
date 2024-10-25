@@ -8,6 +8,7 @@ from wtforms import StringField, FloatField, SubmitField, SelectMultipleField
 from wtforms.validators import DataRequired, NumberRange
 import os
 from dotenv import load_dotenv
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -16,6 +17,11 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///techunar_stock_ai.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Mailgun configuration
+MAILGUN_API_KEY = os.getenv('MAILGUN_API_KEY')
+MAILGUN_DOMAIN = os.getenv('MAILGUN_DOMAIN')
+MAILGUN_FROM = f"Your App <mailgun@{MAILGUN_DOMAIN}>"
 
 # Initialize extensions
 db = SQLAlchemy(app)
