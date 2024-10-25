@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Admin Panel</h1>
+
+<h2 class="mb-3">Pending User Approvals</h2>
+{% if pending_users %}
+    <ul class="list-group mb-4">
+    {% for user in pending_users %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            {{ user.username }} ({{ user.email }})
+            <div>
+                <a href="{{ url_for('approve_user', user_id=user.id) }}" class="btn btn-success btn-sm">Approve</a>
+                <a href="{{ url_for('decline_user', user_id=user.id) }}" class="btn btn-danger btn-sm">Decline</a>
+            </div>
+        </li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No pending approvals.</p>
+{% endif %}
+
+<h2 class="mb-3">All Users</h2>
+<ul class="list-group">
+{% for user in all_users %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+        {{ user.username }} ({{ user.email }})
+        <div>
+            {% if user.is_approved %}
+                <span class="badge bg-success">Approved</span>
+            {% else %}
+                <span class="badge bg-warning text-dark">Pending</span>
+            {% endif %}
+            {% if not user.is_admin %}
+                <a href="{{ url_for('remove_user', user_id=user.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to remove this user?');">Remove</a>
+            {% endif %}
+        </div>
+    </li>
+{% endfor %}
+</ul>
+{% endblock %}
