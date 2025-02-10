@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Max Pain</h2>
+
+    <!-- Search Form -->
+    <form method="get" class="mb-4">
+        <div class="input-group">
+            <input type="text" name="search" class="form-control" placeholder="Search by index name" value="{{ search_query }}">
+            <button class="btn btn-primary" type="submit">Search</button>
+        </div>
+    </form>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th><a href="?sort_by=record_time&sort_order={{ 'desc' if sort_order == 'asc' else 'asc' }}&search={{ search_query }}">Record Date</a></th>
+                        <th><a href="?sort_by=expiry_date&sort_order={{ 'desc' if sort_order == 'asc' else 'asc' }}&search={{ search_query }}">Expiry Date</a></th>
+                        <th><a href="?sort_by=index_name&sort_order={{ 'desc' if sort_order == 'asc' else 'asc' }}&search={{ search_query }}">Index Name</a></th>
+                        <th><a href="?sort_by=max_pain&sort_order={{ 'desc' if sort_order == 'asc' else 'asc' }}&search={{ search_query }}">Max Pain</a></th>
+                        <!-- Add more columns as needed -->
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in max_pain_data %}
+                    <tr>
+                        <td>{{ row['record_time'] }}</td>
+                        <td>{{ row['expiry_date'] }}</td>
+                        <td>{{ row['index_name'] }}</td>
+                        <td>{{ row['max_pain'] }}</td>
+                        <!-- Add more columns as needed -->
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination Controls -->
+    <div class="d-flex justify-content-center">
+        {{ pagination.links | safe }}
+    </div>
+</div>
+{% endblock %}

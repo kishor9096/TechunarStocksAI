@@ -4,31 +4,39 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_bootstrap import Bootstrap5
 from flask_wtf import FlaskForm
-from wtforms import StringField, FloatField, SubmitField, SelectMultipleField
+from wtforms import StringField, FloatField, SubmitField, SelectMultipleField, DateField, SelectField
 from wtforms.validators import DataRequired, NumberRange
 import os
 from dotenv import load_dotenv
 import requests
 from news_fetcher import fetch_news
+import sqlite3
+from datetime import datetime, timedelta
+import json
+from flask_paginate import Pagination, get_page_parameter
+from ExtractNews import start_news_extraction
+import threading
+import time
+from config import Config
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text, asc, desc
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///techunar_stock_ai.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config.from_object(Config)
 
-# Mailgun configuration
-MAILGUN_API_KEY = os.getenv('MAILGUN_API_KEY')
-MAILGUN_DOMAIN = os.getenv('MAILGUN_DOMAIN')
-MAILGUN_FROM = f"Your App <mailgun@{MAILGUN_DOMAIN}>"
-
-# Initialize extensions
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 bootstrap = Bootstrap5(app)
+
+# Configure SQLAlchemy for the Max Pain database
+max_pain_db_uri = app.config['MAX_PAIN_SQLALCHEMY_DATABASE_URI']
+max_pain_engine = create_engine(max_pain_db_uri)
+MaxPainSession = sessionmaker(bind=max_pain_engine)
 
 # List of NSE stocks (you should replace this with a complete list)
 NSE_STOCKS = [
@@ -82,6 +90,23 @@ class ConfigForm(FlaskForm):
     selected_stocks = SelectMultipleField('Select Stocks', choices=[(stock, stock) for stock in NSE_STOCKS])
     selected_news_sources = SelectMultipleField('Select News Sources', choices=[(source, source) for source in NEWS_SOURCES])
     submit = SubmitField('Update Configuration')
+
+class NewsFilterForm(FlaskForm):
+    date_from = DateField('From Date', default=lambda: datetime.now() - timedelta(days=7))
+    date_to = DateField('To Date', default=datetime.now)
+    sentiment = SelectField('Sentiment', choices=[
+        ('', 'All Sentiments'),
+        ('POSITIVE', 'Positive'),
+        ('NEGATIVE', 'Negative'),
+        ('NEUTRAL', 'Neutral')
+    ])
+    recommendation = SelectField('Recommendation', choices=[
+        ('', 'All Recommendations'),
+        ('BUY', 'Buy'),
+        ('SELL', 'Sell'),
+        ('HOLD', 'Hold')
+    ])
+    stocks = SelectMultipleField('Stocks', choices=[(stock, stock) for stock in NSE_STOCKS])
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -199,14 +224,129 @@ def approve_user(user_id):
     
     return redirect(url_for('admin'))
 
-@app.route('/news')
+@app.route('/news', methods=['GET'])
 @login_required
 def news():
-    user_config = current_user.get_config()
-    sources = user_config.selected_news_sources.split(',') if user_config.selected_news_sources else []
-    stocks = user_config.selected_stocks.split(',') if user_config.selected_stocks else []
-    news_articles = fetch_news(sources, stocks)
-    return render_template('news.html', articles=news_articles)
+    # Get pagination parameters
+    page = request.args.get(get_page_parameter(), type=int, default=1)
+    per_page = 21
+    
+    form = NewsFilterForm()
+    
+    # Get filter values from request args
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    sentiment = request.args.get('sentiment')
+    recommendation = request.args.get('recommendation')
+    selected_stocks = request.args.getlist('stocks')
+
+    # Set form values from request args (same as before)
+    if date_from:
+        form.date_from.data = datetime.strptime(date_from, '%Y-%m-%d')
+    if date_to:
+        form.date_to.data = datetime.strptime(date_to, '%Y-%m-%d')
+    if sentiment:
+        form.sentiment.data = sentiment
+    if recommendation:
+        form.recommendation.data = recommendation
+    if selected_stocks:
+        form.stocks.data = selected_stocks
+    elif not form.stocks.data:
+        user_config = current_user.get_config()
+        if user_config.selected_stocks:
+            form.stocks.data = user_config.selected_stocks.split(',')
+
+    # Build the SQL query dynamically
+    query = """
+        SELECT title, description, link, pubDate, sentiment, recommendation, stocks 
+        FROM news_articles 
+        WHERE 1=1 '
+    """
+    count_query = """
+        SELECT COUNT(*) 
+        FROM news_articles 
+        WHERE 1=1 '
+    """
+    params = []
+
+    # Add filters to both queries
+    filter_conditions = []
+    if form.date_from.data:
+        filter_conditions.append("date(pubDate) >= date(?)")
+        params.append(form.date_from.data.isoformat())
+    if form.date_to.data:
+        filter_conditions.append("date(pubDate) <= date(?)")
+        params.append(form.date_to.data.isoformat())
+    if form.sentiment.data:
+        filter_conditions.append("sentiment = ?")
+        params.append(form.sentiment.data)
+    if form.recommendation.data:
+        filter_conditions.append("recommendation = ?")
+        params.append(form.recommendation.data)
+
+    if filter_conditions:
+        filter_sql = " AND " + " AND ".join(filter_conditions)
+        query += filter_sql
+        count_query += filter_sql
+
+    # Add ordering and pagination
+    query += " ORDER BY pubDate DESC LIMIT ? OFFSET ?"
+    pagination_params = params.copy()
+    pagination_params.extend([per_page, (page - 1) * per_page])
+
+    # Connect to the database
+    conn = sqlite3.connect('news_database.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Get total count
+    cursor.execute(count_query, params)
+    total = cursor.fetchone()[0]
+    
+    # Get paginated results
+    cursor.execute(query, pagination_params)
+    articles = cursor.fetchall()
+    conn.close()
+    
+    # Process the articles
+    processed_articles = []
+    selected_stocks = form.stocks.data if form.stocks.data else []
+    
+    for article in articles:
+        try:
+            pub_date = datetime.fromisoformat(article['pubDate'])
+            formatted_date = pub_date.strftime('%B %d, %Y %I:%M %p')
+            stocks = json.loads(article['stocks'])
+            
+            processed_articles.append({
+                'title': article['title'],
+                'description': article['description'],
+                'link': article['link'],
+                'pubDate': formatted_date,
+                'sentiment': article['sentiment'],
+                'recommendation': article['recommendation'],
+                'stocks': stocks
+            })
+        except Exception as e:
+            print(f"Error processing article: {e}")
+            continue
+    
+    # Create pagination object
+    pagination = Pagination(
+        page=page,
+        per_page=per_page,
+        total=total,
+        css_framework='bootstrap5',
+        record_name='articles'
+    )
+    
+    return render_template(
+        'news.html',
+        articles=processed_articles,
+        form=form,
+        pagination=pagination,
+        page=page
+    )
 
 @app.route('/decline_user/<int:user_id>')
 @login_required
@@ -280,6 +420,58 @@ def change_password():
             flash('Incorrect old password.', 'error')
     return render_template('change_password.html')
 
+@app.route('/max_pain', methods=['GET'])
+def max_pain():
+    # Get pagination parameters
+    page = request.args.get(get_page_parameter(), type=int, default=1)
+    per_page = 10
+
+    # Get sorting parameters
+    sort_by = request.args.get('sort_by', 'index_name')
+    sort_order = request.args.get('sort_order', 'asc')
+
+    # Get filter and search parameters
+    search_query = request.args.get('search', '')
+
+    # Fetch Max Pain data from the Max Pain database
+    session = MaxPainSession()
+
+    # Build the base query
+    base_query = f"SELECT * FROM max_pain_data WHERE index_name LIKE :search_query ORDER BY {sort_by} {sort_order} LIMIT :limit OFFSET :offset"
+    count_query = "SELECT COUNT(*) FROM max_pain_data WHERE index_name LIKE :search_query"
+
+    # Execute the count query
+    total = session.execute(text(count_query), {'search_query': f'%{search_query}%'}).scalar()
+
+    # Execute the base query with pagination
+    result = session.execute(text(base_query), {
+        'search_query': f'%{search_query}%',
+        'limit': per_page,
+        'offset': (page - 1) * per_page
+    }).fetchall()
+
+    # Convert rows to dictionaries
+    max_pain_data = [dict(row._mapping) for row in result]
+    session.close()
+
+    # Create pagination object
+    pagination = Pagination(
+        page=page,
+        per_page=per_page,
+        total=total,
+        css_framework='bootstrap5',
+        record_name='max_pain_data'
+    )
+
+    return render_template(
+        'max_pain.html',
+        max_pain_data=max_pain_data,
+        pagination=pagination,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        search_query=search_query
+    )
+
 # Create the database tables
 with app.app_context():
     db.create_all()
@@ -299,7 +491,11 @@ with app.app_context():
     else:
         print("Admin user already exists.")
 
+# Add this near the start of your app initialization
+#news_thread = start_news_extraction()
+#start_news_extraction()
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    app.run(port=int(os.getenv('APP_PORT', 5000)))
+
