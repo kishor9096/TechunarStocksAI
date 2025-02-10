@@ -21,6 +21,7 @@ from config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text, asc, desc
+import pytz
 
 # Load environment variables
 load_dotenv()
@@ -427,31 +428,50 @@ def max_pain():
     per_page = 10
 
     # Get sorting parameters
-    sort_by = request.args.get('sort_by', 'index_name')
-    sort_order = request.args.get('sort_order', 'asc')
+    sort_by = request.args.get('sort_by', 'record_time')
+    sort_order = request.args.get('sort_order', 'desc')
 
     # Get filter and search parameters
-    search_query = request.args.get('search', '')
+    search_query = request.args.getlist('search')
 
     # Fetch Max Pain data from the Max Pain database
     session = MaxPainSession()
 
+    # Fetch unique index names for the dropdown
+    unique_index_names = session.execute(text("SELECT DISTINCT index_name FROM max_pain_data")).fetchall()
+    unique_index_names = [row[0] for row in unique_index_names]
+
     # Build the base query
-    base_query = f"SELECT * FROM max_pain_data WHERE index_name LIKE :search_query ORDER BY {sort_by} {sort_order} LIMIT :limit OFFSET :offset"
-    count_query = "SELECT COUNT(*) FROM max_pain_data WHERE index_name LIKE :search_query"
+    base_query = "SELECT * FROM max_pain_data WHERE 1=1"
+    count_query = "SELECT COUNT(*) FROM max_pain_data WHERE 1=1"
+    params = {}
+
+    if search_query:
+        base_query += " AND index_name IN :search_query"
+        count_query += " AND index_name IN :search_query"
+        params['search_query'] = tuple(search_query)
+
+    base_query += f" ORDER BY {sort_by} {sort_order} LIMIT :limit OFFSET :offset"
+    params['limit'] = per_page
+    params['offset'] = (page - 1) * per_page
 
     # Execute the count query
-    total = session.execute(text(count_query), {'search_query': f'%{search_query}%'}).scalar()
+    total = session.execute(text(count_query), params).scalar()
 
     # Execute the base query with pagination
-    result = session.execute(text(base_query), {
-        'search_query': f'%{search_query}%',
-        'limit': per_page,
-        'offset': (page - 1) * per_page
-    }).fetchall()
+    result = session.execute(text(base_query), params).fetchall()
 
-    # Convert rows to dictionaries
-    max_pain_data = [dict(row._mapping) for row in result]
+    # Convert rows to dictionaries and convert record_time to IST
+    max_pain_data = []
+    utc = pytz.utc
+    ist = pytz.timezone('Asia/Kolkata')
+    for row in result:
+        row_dict = dict(row._mapping)
+        if 'record_time' in row_dict:
+            utc_time = utc.localize(row_dict['record_time'])
+            ist_time = utc_time.astimezone(ist)
+            row_dict['record_time'] = ist_time.strftime('%Y-%m-%d %H:%M:%S')
+        max_pain_data.append(row_dict)
     session.close()
 
     # Create pagination object
@@ -469,7 +489,8 @@ def max_pain():
         pagination=pagination,
         sort_by=sort_by,
         sort_order=sort_order,
-        search_query=search_query
+        search_query=search_query,
+        unique_index_names=unique_index_names
     )
 
 # Create the database tables
