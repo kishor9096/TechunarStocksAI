@@ -2,8 +2,8 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_bootstrap import Bootstrap5
-from flask_wtf import FlaskForm
+from flask_bootstrap import Bootstrap
+from flask_wtf import FlaskForm, CSRFProtect
 from wtforms import StringField, FloatField, SubmitField, SelectMultipleField, DateField, SelectField
 from wtforms.validators import DataRequired, NumberRange
 import os
@@ -32,7 +32,8 @@ app.config.from_object(Config)
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
-bootstrap = Bootstrap5(app)
+bootstrap = Bootstrap(app)
+csrf = CSRFProtect(app)  # Add this line
 
 # Configure SQLAlchemy for the Max Pain database
 max_pain_db_uri = app.config['MAX_PAIN_SQLALCHEMY_DATABASE_URI']
@@ -60,12 +61,13 @@ class UserConfig(db.Model):
     preferred_sectors = db.Column(db.String(200), nullable=True)
     selected_stocks = db.Column(db.String(500), nullable=True)
     selected_news_sources = db.Column(db.String(200), nullable=True)
+    theme = db.Column(db.String(10), nullable=False, default='dark')  # Add this line
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128))
+    password_hash = db.Column(db.String(255))  # Increase the length if needed
     is_admin = db.Column(db.Boolean, default=False)
     is_approved = db.Column(db.Boolean, default=False)
     config = db.relationship('UserConfig', backref='user', uselist=False, cascade='all, delete-orphan')
@@ -90,6 +92,7 @@ class ConfigForm(FlaskForm):
     preferred_sectors = StringField('Preferred Sectors (comma-separated)')
     selected_stocks = SelectMultipleField('Select Stocks', choices=[(stock, stock) for stock in NSE_STOCKS])
     selected_news_sources = SelectMultipleField('Select News Sources', choices=[(source, source) for source in NEWS_SOURCES])
+    theme = SelectField('Theme', choices=[('dark', 'Dark'), ('light', 'Light')])  # Add this line
     submit = SubmitField('Update Configuration')
 
 class NewsFilterForm(FlaskForm):
@@ -135,6 +138,7 @@ def user_config():
         user_config.preferred_sectors = form.preferred_sectors.data
         user_config.selected_stocks = ','.join(form.selected_stocks.data)
         user_config.selected_news_sources = ','.join(form.selected_news_sources.data)
+        user_config.theme = form.theme.data  # Add this line
         db.session.commit()
         flash('Your configuration has been updated.', 'success')
         return redirect(url_for('user_config'))
@@ -145,6 +149,7 @@ def user_config():
         form.preferred_sectors.data = user_config.preferred_sectors
         form.selected_stocks.data = user_config.selected_stocks.split(',') if user_config.selected_stocks else []
         form.selected_news_sources.data = user_config.selected_news_sources.split(',') if user_config.selected_news_sources else []
+        form.theme.data = user_config.theme  # Add this line
     
     return render_template('user_config.html', form=form)
 
@@ -492,6 +497,16 @@ def max_pain():
         search_query=search_query,
         unique_index_names=unique_index_names
     )
+
+@app.route('/save_theme', methods=['POST'])
+@login_required
+def save_theme():
+    data = request.get_json()
+    theme = data.get('theme')
+    user_config = current_user.get_config()
+    user_config.theme = theme
+    db.session.commit()
+    return {'status': 'success'}
 
 # Create the database tables
 with app.app_context():

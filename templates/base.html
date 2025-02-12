@@ -6,6 +6,98 @@
     <title>{% block title %}Techunar Stock AI{% endblock %}</title>
     {{ bootstrap.load_css() }}
     {% block styles %}{% endblock %}
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const themeToggle = document.getElementById('theme-toggle');
+            const currentTheme = localStorage.getItem('theme') || '{% if current_user.is_authenticated %}{{ current_user.get_config().theme }}{% else %}dark{% endif %}';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+            themeToggle.checked = currentTheme === 'dark';
+
+            themeToggle.addEventListener('change', function() {
+                const theme = this.checked ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+
+                // Save the theme preference to the server if the user is authenticated
+                {% if current_user.is_authenticated %}
+                fetch('/save_theme', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({ theme: theme })
+                });
+                {% endif %}
+            });
+        });
+    </script>
+    <style>
+        [data-theme="dark"] {
+            background-color: #121212;
+            color: #ffffff;
+        }
+        [data-theme="dark"] .navbar {
+            background-color: #1f1f1f;
+        }
+        [data-theme="dark"] .navbar .nav-link {
+            color: #ffffff;
+        }
+        [data-theme="dark"] .container {
+            background-color: #121212;
+            color: #ffffff;
+        }
+        [data-theme="dark"] .alert {
+            background-color: #333333;
+            color: #ffffff;
+        }
+        [data-theme="dark"] .form-control {
+            background-color: #333333;
+            color: #ffffff;
+        }
+        [data-theme="dark"] .btn {
+            background-color: #444444;
+            color: #ffffff;
+        }
+        [data-theme="dark"] .card {
+            background-color: #1f1f1f;
+            color: #ffffff;
+        }
+        [data-theme="dark"] .table {
+            background-color: #1f1f1f;
+            color: #ffffff;
+        }
+        [data-theme="dark"] .table th,
+        [data-theme="dark"] .table td {
+            border-color: #444444;
+        }
+        [data-theme="dark"] .modal-content {
+            background-color: #1f1f1f;
+            color: #ffffff;
+        }
+        [data-theme="dark"] .dropdown-menu {
+            background-color: #1f1f1f;
+            color: #ffffff;
+        }
+        [data-theme="dark"] .dropdown-item {
+            color: #ffffff;
+        }
+        [data-theme="dark"] .dropdown-item:hover {
+            background-color: #333333;
+        }
+        [data-theme="dark"] .pagination .page-link {
+            background-color: #1f1f1f;
+            color: #ffffff;
+            border-color: #444444;
+        }
+        [data-theme="dark"] .pagination .page-link:hover {
+            background-color: #333333;
+        }
+        [data-theme="dark"] .pagination .page-item.active .page-link {
+            background-color: #444444;
+            border-color: #444444;
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
@@ -53,6 +145,11 @@
             </div>
         </div>
     </nav>
+
+    <label>
+        Dark Mode
+        <input type="checkbox" id="theme-toggle">
+    </label>
 
     <div class="container mt-4">
         {% with messages = get_flashed_messages(with_categories=true) %}

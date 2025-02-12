@@ -12,8 +12,11 @@
                 <option value="{{ index_name }}" {% if index_name in search_query %}selected{% endif %}>{{ index_name }}</option>
                 {% endfor %}
             </select>
+            
+        </div>
+        <div class="input-group-append">
             <button class="btn btn-primary" type="submit">Search</button>
-            <a href="{{ url_for('max_pain') }}" class="btn btn-secondary ms-2">Refresh</a>
+            <a href="{{ url_for('max_pain') }}" class="btn btn-primary ms-2">Refresh</a>
         </div>
     </form>
 
