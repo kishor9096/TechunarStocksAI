@@ -2,6 +2,7 @@ Flask
 Flask-SQLAlchemy
 Flask-Login
 Flask-Bootstrap5
+Flask-Bootstrap
 python-dotenv
 requests
 Flask-WTF
