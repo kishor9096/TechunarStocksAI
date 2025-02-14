@@ -423,6 +423,7 @@ def change_password():
     return render_template('change_password.html',bootstrap=bootstrap)
 
 @app.route('/max_pain', methods=['GET'])
+@login_required
 def max_pain():
     # Get pagination parameters
     page = request.args.get(get_page_parameter(), type=int, default=1)
@@ -495,6 +496,7 @@ def max_pain():
     )
 
 @app.route('/max_pain_new', methods=['GET'])
+@login_required
 def max_pain_new():
     # Get pagination parameters
     page = request.args.get(get_page_parameter(), type=int, default=1)
