@@ -1,3 +1,4 @@
+import sqlite3
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
@@ -18,6 +19,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text, asc, desc
 import pytz
 import requests
+import json
 
 # Load environment variables
 load_dotenv()
