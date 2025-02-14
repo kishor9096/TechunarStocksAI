@@ -1,4 +1,5 @@
 Flask
+flask_bootstrap
 Flask-SQLAlchemy
 Flask-Login
 Flask-Bootstrap5

@@ -2,7 +2,9 @@
 .env
 __pycache__/
 data/
-venv/
+.venv/
+.vscode/
 *.pyc
 *.pyo
 *.pyd
+*.out

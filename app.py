@@ -1,27 +1,23 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_bootstrap import Bootstrap5
+from flask_bootstrap import Bootstrap
 from flask_wtf import FlaskForm
 from wtforms import StringField, FloatField, SubmitField, SelectMultipleField, DateField, SelectField
 from wtforms.validators import DataRequired, NumberRange
-import os
 from dotenv import load_dotenv
-import requests
 from news_fetcher import fetch_news
-import sqlite3
 from datetime import datetime, timedelta
-import json
 from flask_paginate import Pagination, get_page_parameter
 from ExtractNews import start_news_extraction
-import threading
-import time
 from config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text, asc, desc
 import pytz
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -32,7 +28,7 @@ app.config.from_object(Config)
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
-bootstrap = Bootstrap5(app)
+bootstrap = Bootstrap(app)
 
 # Configure SQLAlchemy for the Max Pain database
 max_pain_db_uri = app.config['MAX_PAIN_SQLALCHEMY_DATABASE_URI']
@@ -116,12 +112,12 @@ def load_user(user_id):
 # Routes
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html',bootstrap=bootstrap)
 
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    return render_template('dashboard.html')
+    return render_template('dashboard.html',bootstrap=bootstrap)
 
 @app.route('/user_config', methods=['GET', 'POST'])
 @login_required
@@ -146,7 +142,7 @@ def user_config():
         form.selected_stocks.data = user_config.selected_stocks.split(',') if user_config.selected_stocks else []
         form.selected_news_sources.data = user_config.selected_news_sources.split(',') if user_config.selected_news_sources else []
     
-    return render_template('user_config.html', form=form)
+    return render_template('user_config.html', form=form,bootstrap=bootstrap)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -163,7 +159,7 @@ def login():
                 flash('Your account is pending approval.', 'warning')
         else:
             flash('Invalid username or password.', 'error')
-    return render_template('login.html')
+    return render_template('login.html',bootstrap=bootstrap)
 
 @app.route('/logout')
 @login_required
@@ -192,11 +188,11 @@ def register():
             
             # Send welcome email
             send_email(new_user.email, 'Welcome to Our App',
-                       render_template('emails/welcome.html', user=new_user))
+                       render_template('emails/welcome.html', user=new_user,bootstrap=bootstrap))
             
             return redirect(url_for('login'))
     
-    return render_template('register.html')
+    return render_template('register.html',bootstrap=bootstrap)
 
 @app.route('/admin')
 @login_required
@@ -206,7 +202,7 @@ def admin():
         return redirect(url_for('index'))
     pending_users = User.query.filter_by(is_approved=False).all()
     all_users = User.query.all()
-    return render_template('admin.html', pending_users=pending_users, all_users=all_users)
+    return render_template('admin.html', pending_users=pending_users, all_users=all_users,bootstrap=bootstrap)
 
 @app.route('/approve/<int:user_id>')
 @login_required
@@ -221,7 +217,7 @@ def approve_user(user_id):
     
     # Send approval email
     send_email(user.email, 'Your Account Has Been Approved',
-               render_template('emails/approved.html', user=user))
+               render_template('emails/approved.html', user=user,bootstrap=bootstrap))
     
     return redirect(url_for('admin'))
 
@@ -346,7 +342,7 @@ def news():
         articles=processed_articles,
         form=form,
         pagination=pagination,
-        page=page
+        page=page,bootstrap=bootstrap
     )
 
 @app.route('/decline_user/<int:user_id>')
@@ -362,7 +358,7 @@ def decline_user(user_id):
     else:
         # Send decline email
         send_email(user.email, 'Your Account Registration Was Declined',
-                   render_template('emails/declined.html', user=user))
+                   render_template('emails/declined.html', user=user,bootstrap=bootstrap))
         
         db.session.delete(user)
         db.session.commit()
@@ -383,7 +379,7 @@ def remove_user(user_id):
     else:
         # Send removal notification email
         send_email(user.email, 'Your Account Has Been Removed',
-                   render_template('emails/account_removed.html', user=user))
+                   render_template('emails/account_removed.html', user=user,bootstrap=bootstrap))
         
         db.session.delete(user)
         db.session.commit()
@@ -392,6 +388,9 @@ def remove_user(user_id):
     return redirect(url_for('admin'))
 
 def send_email(to, subject, template):
+    MAILGUN_API_KEY = os.getenv('MAILGUN_API_KEY')
+    MAILGUN_DOMAIN = os.getenv('MAILGUN_DOMAIN')
+    MAILGUN_FROM = os.getenv('MAILGUN_FROM')
     return requests.post(
         f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
         auth=("api", MAILGUN_API_KEY),
@@ -414,12 +413,12 @@ def change_password():
             
             # Send password change alert
             send_email(current_user.email, 'Password Change Alert',
-                       render_template('emails/password_changed.html', user=current_user))
+                       render_template('emails/password_changed.html', user=current_user,bootstrap=bootstrap))
             
             return redirect(url_for('index'))
         else:
             flash('Incorrect old password.', 'error')
-    return render_template('change_password.html')
+    return render_template('change_password.html',bootstrap=bootstrap)
 
 @app.route('/max_pain', methods=['GET'])
 def max_pain():
@@ -490,7 +489,7 @@ def max_pain():
         sort_by=sort_by,
         sort_order=sort_order,
         search_query=search_query,
-        unique_index_names=unique_index_names
+        unique_index_names=unique_index_names,bootstrap=bootstrap
     )
 
 # Create the database tables
@@ -518,5 +517,5 @@ with app.app_context():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(port=int(os.getenv('APP_PORT', 5000)))
+    app.run(host='0.0.0.0',port=int(os.getenv('APP_PORT', 5000)))
 
