@@ -494,6 +494,93 @@ def max_pain():
         unique_index_names=unique_index_names,bootstrap=bootstrap
     )
 
+@app.route('/max_pain_new', methods=['GET'])
+def max_pain_new():
+    # Get pagination parameters
+    page = request.args.get(get_page_parameter(), type=int, default=1)
+    per_page = 20
+
+    # Get sorting parameters
+    sort_by = request.args.get('sort_by', 'record_time')
+    sort_order = request.args.get('sort_order', 'desc')
+
+    # Get filter and search parameters
+    index_name_filter = request.args.get('index_name', '')
+    expiry_date_filter = request.args.get('expiry_date', '')
+
+    # Fetch Max Pain data from the Max Pain database
+    session = MaxPainSession()
+
+    # Fetch unique index names for the tabs
+    unique_index_names = session.execute(text("SELECT DISTINCT index_name FROM max_pain_data")).fetchall()
+    unique_index_names = [row[0] for row in unique_index_names]
+
+    # Fetch unique expiry dates for the selected index
+    expiry_dates = []
+    if index_name_filter:
+        result = session.execute(text("SELECT DISTINCT expiry_date FROM max_pain_data WHERE index_name = :index_name ORDER BY expiry_date"), {'index_name': index_name_filter}).fetchall()
+        expiry_dates = [row[0] for row in result]
+
+    # Build the base query with filters
+    base_query = "SELECT * FROM max_pain_data WHERE 1=1"
+    count_query = "SELECT COUNT(*) FROM max_pain_data WHERE 1=1"
+    params = {}
+
+    if index_name_filter:
+        base_query += " AND index_name = :index_name"
+        count_query += " AND index_name = :index_name"
+        params['index_name'] = index_name_filter
+
+    if expiry_date_filter:
+        base_query += " AND expiry_date = :expiry_date"
+        count_query += " AND expiry_date = :expiry_date"
+        params['expiry_date'] = expiry_date_filter
+
+    base_query += f" ORDER BY {sort_by} {sort_order} LIMIT :limit OFFSET :offset"
+    params['limit'] = per_page
+    params['offset'] = (page - 1) * per_page
+
+    # Execute the count query with filters
+    total_filtered = session.execute(text(count_query), params).scalar()
+
+    # Execute the base query with pagination
+    result = session.execute(text(base_query), params).fetchall()
+
+    # Convert rows to dictionaries and convert record_time to IST
+    max_pain_data = []
+    utc = pytz.utc
+    ist = pytz.timezone('Asia/Kolkata')
+    for row in result:
+        row_dict = dict(row._mapping)
+        if 'record_time' in row_dict:
+            utc_time = utc.localize(row_dict['record_time'])
+            ist_time = utc_time.astimezone(ist)
+            row_dict['record_time'] = ist_time.strftime('%Y-%m-%d %H:%M:%S')
+        max_pain_data.append(row_dict)
+    session.close()
+
+    # Create pagination object
+    pagination = Pagination(
+        page=page,
+        per_page=per_page,
+        total=total_filtered,
+        css_framework='bootstrap5',
+        record_name='max_pain_data'
+    )
+
+    return render_template(
+        'max_pain_new.html',
+        max_pain_data=max_pain_data,
+        pagination=pagination,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        index_name_filter=index_name_filter,
+        expiry_date_filter=expiry_date_filter,
+        unique_index_names=unique_index_names,
+        expiry_dates=expiry_dates,
+        total_filtered=total_filtered
+    )
+
 # Create the database tables
 with app.app_context():
     db.create_all()

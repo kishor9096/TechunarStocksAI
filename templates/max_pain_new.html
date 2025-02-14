@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Max Pain New</h2>
+
+    <!-- Filter Form -->
+    <form method="get" class="mb-4">
+        <div class="input-group">
+            <select name="index_name" class="form-control" onchange="this.form.submit()">
+                <option value="">Select Index</option>
+                {% for index_name in unique_index_names %}
+                <option value="{{ index_name }}" {% if index_name == index_name_filter %}selected{% endif %}>{{ index_name }}</option>
+                {% endfor %}
+            </select>
+            <select name="expiry_date" class="form-control ms-2" onchange="this.form.submit()">
+                <option value="">Select Expiry Date</option>
+                {% for expiry_date in expiry_dates %}
+                <option value="{{ expiry_date }}" {% if expiry_date == expiry_date_filter %}selected{% endif %}>{{ expiry_date }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-primary ms-2" type="submit">Filter</button>
+        </div>
+    </form>
+
+    <!-- Display Total Count -->
+    <p>Total filtered records: <strong>{{ total_filtered }}</strong></p>
+
+    <!-- Data Table -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th><a href="?sort_by=record_time&sort_order={{ 'desc' if sort_order == 'asc' else 'asc' }}&index_name={{ index_name_filter }}&expiry_date={{ expiry_date_filter }}">Record Date</a></th>
+                        <th><a href="?sort_by=max_pain_trend&sort_order={{ 'desc' if sort_order == 'asc' else 'asc' }}&index_name={{ index_name_filter }}&expiry_date={{ expiry_date_filter }}">Max Pain Trend</a></th>
+                        <th><a href="?sort_by=max_pain_price&sort_order={{ 'desc' if sort_order == 'asc' else 'asc' }}&index_name={{ index_name_filter }}&expiry_date={{ expiry_date_filter }}">Max Pain</a></th>
+                        <th><a href="?sort_by=index_price_close&sort_order={{ 'desc' if sort_order == 'asc' else 'asc' }}&index_name={{ index_name_filter }}&expiry_date={{ expiry_date_filter }}">Index Price</a></th>
+                        <th><a href="?sort_by=expiry_date&sort_order={{ 'desc' if sort_order == 'asc' else 'asc' }}&index_name={{ index_name_filter }}&expiry_date={{ expiry_date_filter }}">Expiry Date</a></th>
+                        <th><a href="?sort_by=index_name&sort_order={{ 'desc' if sort_order == 'asc' else 'asc' }}&index_name={{ index_name_filter }}&expiry_date={{ expiry_date_filter }}">Index Name</a></th>
+                        <!-- Add more columns as needed -->
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in max_pain_data %}
+                    <tr>
+                        <td>{{ row['record_time'] }}</td>
+                        <td>{{ row['max_pain_trend'] }}</td>
+                        <td>{{ row['max_pain_price'] }}</td>
+                        <td>{{ row['index_price_close'] }}</td>
+                        <td>{{ row['expiry_date'] }}</td>
+                        <td>{{ row['index_name'] }}</td>
+                        <!-- Add more columns as needed -->
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination Controls -->
+    <div class="d-flex justify-content-center">
+        {{ pagination.links | safe }}
+    </div>
+</div>
+{% endblock %}
