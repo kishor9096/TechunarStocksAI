@@ -22,14 +22,20 @@
             <button class="btn btn-primary ms-2" type="submit">Filter</button>
         </div>
     </form>
-
+     <!-- Display Graph -->
+    <!-- Conditionally render the chart if filter is applied -->
+    {% if index_name_filter %}
+    <!-- Line graph for Max Pain and Index Price -->
+    <canvas id="myChart" width="400" height="200"></canvas>
+    {% endif %}
+    
     <!-- Display Total Count -->
     <p>Total filtered records: <strong>{{ total_filtered }}</strong></p>
 
     <!-- Data Table -->
     <div class="card mb-4">
         <div class="card-body">
-            <table class="table table-striped">
+            <table class="table table-striped" id="maxPainTable">
                 <thead>
                     <tr>
                         <th><a href="?sort_by=record_time&sort_order={{ 'desc' if sort_order == 'asc' else 'asc' }}&index_name={{ index_name_filter }}&expiry_date={{ expiry_date_filter }}">Record Date</a></th>
@@ -62,5 +68,64 @@
     <div class="d-flex justify-content-center">
         {{ pagination.links | safe }}
     </div>
+   
 </div>
+{% endblock %}
+{% block scripts %}
+{% if index_name_filter %}
+<script>
+    // Extract data from the table
+    const table = document.getElementById('maxPainTable');
+    const labels = [];
+    const maxPainPriceData = [];
+    const indexPriceCloseData = [];
+
+    for (let i = 1, row; row = table.rows[i]; i++) {
+        labels.push(new Date(row.cells[0].innerText));
+        maxPainPriceData.push(parseFloat(row.cells[2].innerText));
+        indexPriceCloseData.push(parseFloat(row.cells[3].innerText));
+    }
+
+    const data = {
+        labels: labels,
+        datasets: [
+            {
+                label: 'Max Pain Price',
+                data: maxPainPriceData,
+                borderColor: 'red',
+                fill: false
+            },
+            {
+                label: 'Index Price Close',
+                data: indexPriceCloseData,
+                borderColor: 'blue',
+                fill: false
+            }
+        ]
+    };
+
+    const config = {
+        type: 'line',
+        data: data,
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: false
+                },
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'month'
+                    }
+                }
+            }
+        }
+    };
+
+    const myChart = new Chart(
+        document.getElementById('myChart'),
+        config
+    );
+</script>
+{% endif %}
 {% endblock %}
