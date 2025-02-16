@@ -81,15 +81,17 @@ def convert_to_datetime(date_string):
 def extract_article_text(url):
     article_response = requests.get(url)
     article_soup = BeautifulSoup(article_response.text, 'html.parser')
-    
     domain = urlparse(url).netloc
     
     if 'moneycontrol.com' in domain:
         content_div = article_soup.find('div', class_='content_wrapper')
         return content_div.get_text(strip=True) if content_div else ""
     elif 'economictimes.indiatimes.com' in domain:
-        content_div = article_soup.find('div', class_='artText')
-        return content_div.get_text(strip=True) if content_div else ""
+        data_elements = article_soup.find_all('main', class_='clr customclr')
+        for tag in data_elements(['img', 'a']):
+            tag.decompose()
+        #content_div = data_elements.find('div', class_='artText')
+        return data_elements.get_text(strip=True) if content_div else ""
     else:
         # Default case or for unknown domains
         return article_soup.get_text(strip=True)
