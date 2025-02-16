@@ -20,3 +20,4 @@ python-docx
 Pillow
 pymysql
 pytz
+mysql-connector-python

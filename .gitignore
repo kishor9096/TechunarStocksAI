@@ -8,3 +8,5 @@ data/
 *.pyo
 *.pyd
 *.out
+.env copy
+venv/

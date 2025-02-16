@@ -1,13 +1,18 @@
+import os
 import configparser
 import requests
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 from datetime import datetime
-import sqlite3
+import mysql.connector
 from urllib.parse import urlparse
 import json
 import threading
 import time
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 def extract_and_save_news():
     # Read URLs and Ollama config from app.config
@@ -17,15 +22,25 @@ def extract_and_save_news():
     ollama_api_url = config.get('Ollama', 'api_url')
     ollama_model = config.get('Ollama', 'model')
 
-    # Connect to the database
-    conn = sqlite3.connect('news_database.db')
+    # Connect to the database using environment variables
+    # Connect to the database using environment variables
+    conn = mysql.connector.connect(
+        host=os.getenv('MYSQL_HOST'),
+        port=os.getenv('MYSQL_PORT'),
+        database=os.getenv('MAX_PAIN_DATABASE'),
+        user=os.getenv('MYSQL_USER'),
+        password=os.getenv('MYSQL_PASSWORD')
+    )
     cursor = conn.cursor()
+
+    # Select the database
+    #cursor.execute(f"USE {os.getenv('MAX_PAIN_DATABASE')}")
 
     # Create table if not exists (updated schema)
     cursor.execute('''CREATE TABLE IF NOT EXISTS news_articles
-                  (title TEXT, description TEXT, link TEXT PRIMARY KEY, pubDate DATETIME, article TEXT,
-                   sentiment TEXT, recommendation TEXT, stocks JSON)''')
-
+                      (title TEXT, description TEXT, link TEXT, pubDate TIMESTAMP, article TEXT,
+                       sentiment TEXT, recommendation TEXT, stocks JSON, PRIMARY KEY (link(255)))''')
+    
     for url in urls:
         # Fetch and parse XML content
         response = requests.get(url.strip())
@@ -40,7 +55,7 @@ def extract_and_save_news():
             pubDate = convert_to_datetime(pubDate_str)
 
             # Check if the article already exists in the database
-            cursor.execute("SELECT * FROM news_articles WHERE link = ?", (link,))
+            cursor.execute("SELECT * FROM news_articles WHERE link = %s", (link,))
             if cursor.fetchone() is None:
                 # Extract full article text based on domain
                 article_text = extract_article_text(link)
@@ -51,7 +66,7 @@ def extract_and_save_news():
                 # Insert into database (updated query)
                 cursor.execute('''INSERT INTO news_articles 
                                   (title, description, link, pubDate, article, sentiment, recommendation, stocks)
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                                  VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''',
                                (title, description, link, pubDate.isoformat(), article_text, sentiment, recommendation, json.dumps(stocks)))
                 conn.commit()
                 print(f"Added new article: {title} - Stocks: {stocks} - Sentiment: {sentiment}, Recommendation: {recommendation}")
@@ -118,21 +133,6 @@ Respond in the following JSON format:
         print(f"Error calling Ollama API: {response.status_code}")
         return "UNKNOWN", "UNKNOWN", []
 
-def start_news_extraction():
-    """Function to start the news extraction as a background thread that runs every 30 minutes"""
-    def run_periodically():
-        while True:
-            try:
-                extract_and_save_news()
-                time.sleep(1800)  # Sleep for 30 minutes (1800 seconds)
-            except Exception as e:
-                print(f"Error in news extraction: {e}")
-                time.sleep(60)  # If there's an error, wait 1 minute before retrying
-
-    thread = threading.Thread(target=run_periodically, daemon=True)
-    thread.start()
-    return thread
-
 # Replace the direct function call with the background thread
 if __name__ == "__main__":
-    start_news_extraction()
+    extract_and_save_news()

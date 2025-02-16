@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from news_fetcher import fetch_news
 from datetime import datetime, timedelta
 from flask_paginate import Pagination, get_page_parameter
-from ExtractNews import start_news_extraction
+from ExtractNews import extract_and_save_news
 from config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -20,6 +20,7 @@ from sqlalchemy import text, asc, desc
 import pytz
 import requests
 import json
+import mysql.connector
 
 # Load environment variables
 load_dotenv()
@@ -259,28 +260,29 @@ def news():
     query = """
         SELECT title, description, link, pubDate, sentiment, recommendation, stocks 
         FROM news_articles 
-        WHERE 1=1 '
+        WHERE 1=1
     """
     count_query = """
         SELECT COUNT(*) 
         FROM news_articles 
-        WHERE 1=1 '
+        WHERE 1=1
     """
+
     params = []
 
     # Add filters to both queries
     filter_conditions = []
     if form.date_from.data:
-        filter_conditions.append("date(pubDate) >= date(?)")
+        filter_conditions.append("date(pubDate) >= date(%s)")
         params.append(form.date_from.data.isoformat())
     if form.date_to.data:
-        filter_conditions.append("date(pubDate) <= date(?)")
+        filter_conditions.append("date(pubDate) <= date(%s)")
         params.append(form.date_to.data.isoformat())
     if form.sentiment.data:
-        filter_conditions.append("sentiment = ?")
+        filter_conditions.append("sentiment = %s")
         params.append(form.sentiment.data)
     if form.recommendation.data:
-        filter_conditions.append("recommendation = ?")
+        filter_conditions.append("recommendation = %s")
         params.append(form.recommendation.data)
 
     if filter_conditions:
@@ -289,13 +291,18 @@ def news():
         count_query += filter_sql
 
     # Add ordering and pagination
-    query += " ORDER BY pubDate DESC LIMIT ? OFFSET ?"
+    query += " ORDER BY pubDate DESC LIMIT %s OFFSET %s"
     pagination_params = params.copy()
     pagination_params.extend([per_page, (page - 1) * per_page])
 
     # Connect to the database
-    conn = sqlite3.connect('news_database.db')
-    conn.row_factory = sqlite3.Row
+    conn = mysql.connector.connect(
+        host=os.getenv('MYSQL_HOST'),
+        port=os.getenv('MYSQL_PORT'),
+        database=os.getenv('MAX_PAIN_DATABASE'),
+        user=os.getenv('MYSQL_USER'),
+        password=os.getenv('MYSQL_PASSWORD')
+    )
     cursor = conn.cursor()
     
     # Get total count
@@ -313,17 +320,17 @@ def news():
     
     for article in articles:
         try:
-            pub_date = datetime.fromisoformat(article['pubDate'])
+            pub_date = (article[3])
             formatted_date = pub_date.strftime('%B %d, %Y %I:%M %p')
-            stocks = json.loads(article['stocks'])
+            stocks = json.loads(article[6])
             
             processed_articles.append({
-                'title': article['title'],
-                'description': article['description'],
-                'link': article['link'],
+                'title': article[0],
+                'description': article[1],
+                'link': article[2],
                 'pubDate': formatted_date,
-                'sentiment': article['sentiment'],
-                'recommendation': article['recommendation'],
+                'sentiment': article[4],
+                'recommendation': article[5],
                 'stocks': stocks
             })
         except Exception as e:

@@ -44,7 +44,7 @@
                     {{ form.stocks.label(class="form-label") }}
                     <select class="form-select" name="stocks" multiple data-live-search="true">
                         {% for stock in form.stocks.choices %}
-                        <option value="{{ stock[0] }}" {% if stock[0] in form.stocks.data %}selected{% endif %}>
+                        <option value="{{ stock[0] }}" {% if form.stocks.data and stock[0] in form.stocks.data %}selected{% endif %}>
                             {{ stock[1] }}
                         </option>
                         {% endfor %}
