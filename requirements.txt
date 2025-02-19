@@ -21,3 +21,4 @@ Pillow
 pymysql
 pytz
 mysql-connector-python
+telegram

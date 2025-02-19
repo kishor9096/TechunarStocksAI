@@ -21,6 +21,9 @@ import pytz
 import requests
 import json
 import mysql.connector
+import telegram
+from telegram import Bot, Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
 # Load environment variables
 load_dotenv()
@@ -122,6 +125,41 @@ def index():
 def dashboard():
     return render_template('dashboard.html',bootstrap=bootstrap)
 
+@app.route("/webhook", methods=['POST'])
+def webhook():
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+            # Process the received data
+            print(f"Received data: {data}")
+            
+
+            # Replace with your bot token
+            BOT_TOKEN = app.config['telegram_token']
+
+            # Initialize the bot
+            bot = Bot(token=BOT_TOKEN)
+
+            # Example: Send a message to a specific chat ID
+            chat_id = app.config['telegram_group_ID']  # Replace with the chat ID you want to send the message to
+            if 'message' in data:
+                message_to_send = data['message']
+                try:
+                    bot.send_message(chat_id=chat_id, text=message_to_send)
+                    print(f"Message sent to Telegram: {message_to_send}")
+                except telegram.error.TelegramError as e:
+                    print(f"Error sending message to Telegram: {e}")
+            if 'message' in data:
+                message = data['message']
+                print(f"Message received: {message}")
+                # Do something with the message
+            return "Webhook received successfully", 200
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON: {e}")
+            return "Invalid JSON payload", 400
+    else:
+        return "Only POST requests are allowed", 405
+    
 @app.route('/user_config', methods=['GET', 'POST'])
 @login_required
 def user_config():
