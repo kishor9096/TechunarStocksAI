@@ -23,7 +23,7 @@ import json
 import mysql.connector
 import telegram
 from telegram import Bot, Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import asyncio
 
 # Load environment variables
 load_dotenv()
@@ -135,17 +135,24 @@ def webhook():
             
 
             # Replace with your bot token
-            BOT_TOKEN = app.config['telegram_token']
+            BOT_TOKEN = os.getenv('telegram_token')
 
             # Initialize the bot
             bot = Bot(token=BOT_TOKEN)
 
             # Example: Send a message to a specific chat ID
-            chat_id = app.config['telegram_group_ID']  # Replace with the chat ID you want to send the message to
+            chat_id = os.getenv('telegram_group_ID')  # Replace with the chat ID you want to send the message to
             if 'message' in data:
                 message_to_send = data['message']
                 try:
-                    bot.send_message(chat_id=chat_id, text=message_to_send)
+                    #asyncio.run(bot.send_message(chat_id, message_to_send))
+                    try:
+                        asyncio.run(bot.send_message(chat_id=chat_id, text=message_to_send))
+                    except Exception as e:
+                        print(f"Error sending message to Telegram: {e}")
+                        # Log the error for debugging
+                        with open("telegram_errors.log", "a") as error_log:
+                            error_log.write(f"Error sending message: {e}\n")
                     print(f"Message sent to Telegram: {message_to_send}")
                 except telegram.error.TelegramError as e:
                     print(f"Error sending message to Telegram: {e}")

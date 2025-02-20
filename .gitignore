@@ -10,3 +10,6 @@ data/
 *.out
 .env copy
 venv/
+ExtractNews_cron_log.txt
+*.txt
+*.log
